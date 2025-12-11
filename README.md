@@ -1,6 +1,7 @@
 # modeling_air_quality_fire_machine_learning
 A repository to hold an exploration of the way wildfires impact air quality using various modeling techniques in the field of machine learning.
 
+
 Numeric Variables (14+):
 
 PM2.5, PM10, O3, NO2, CO, SO2
