@@ -1,6 +1,6 @@
 # modeling_air_quality_fire_machine_learning
 
-
+Developed by Anna Li, Karina Mehta, Shaveen Saadee, and Caroline Kranefuss
 ----------------------------
 Goal: predict air quality based on wildfire, weather, location, and time
 
