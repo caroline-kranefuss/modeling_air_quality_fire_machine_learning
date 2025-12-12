@@ -6,18 +6,6 @@ Goal: predict air quality based on wildfire, weather, location, and time
 
 
 ----------------------------
-Key Questions for the Future:
-
-How does fire proximity affect PM2.5 levels?
-
-Which pollutants are most impacted by wildfires?
-
-Do weather conditions moderate fire impacts on air quality?
-
-Can we cluster regions by air quality response patterns?
-
-
-----------------------------
 Models Used:
 
 Linear Regression – predict PM2.5 from fire distance and conditions, weather
@@ -60,6 +48,18 @@ Station name (if you keep it)
 
 Month (can treat as categorical)
 
+
+
+----------------------------
+Key Questions for the Future:
+
+How does fire proximity affect PM2.5 levels?
+
+Which pollutants are most impacted by wildfires?
+
+Do weather conditions moderate fire impacts on air quality?
+
+Can we cluster regions by air quality response patterns?
 
 
 
