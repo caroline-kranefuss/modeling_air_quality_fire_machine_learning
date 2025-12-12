@@ -10,6 +10,8 @@ Models Used:
 
 Linear Regression – predict PM2.5 from fire distance and conditions, weather
 
+Logit - predict whether PM2.5 is above or below the average scaled value
+
 KNN – predict air quality from similar conditions
 
 K-Means Clustering – cluster monitoring stations by pollution patterns, interpret clusters (e.g., heavily impacted, moderately impacted)
