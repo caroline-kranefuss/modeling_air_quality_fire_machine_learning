@@ -2,11 +2,11 @@
 
 
 ----------------------------
-Goal: predict air quality degradation from wildfire proximity
+Goal: predict air quality based on wildfire, weather, location, and time
 
 
 ----------------------------
-Key Questions:
+Key Questions for the Future:
 
 How does fire proximity affect PM2.5 levels?
 
