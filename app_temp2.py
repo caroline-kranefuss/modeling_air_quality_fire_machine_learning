@@ -729,13 +729,10 @@ def display_mlr_tab(df: pd.DataFrame):
     st.plotly_chart(fig_resid, use_container_width=True)
     st.info(
         """
-        **Model Robustness:** The residual plot shows a concentration of positive residuals at higher predicted PM2.5 values (heteroscedasticity). This suggests the model is **less accurate at predicting extreme high PM2.5 events** but is generally robust for normal air quality predictions. 
+        **Model Robustness:** The residual plot shows a concentration of positive residuals at higher predicted PM2.5 values (heteroscedasticity). This suggests the model is **less accurate at predicting extreme high PM2.5 events** but is generally robust for normal air quality predictions.
+        **Conclusion:** Now all our predictors are statistically significant and our r-squared and adjusted r-squared values are much higher. Over 60% of the variation in the data are explained by our predictors. The residual plot for the model fitted to the tested model is different from the one previously seen; this is because of the lasso regularization that was performed. Now residuals tend positive, but most are close to zero. Their patterns do not change as the fitted values change. This is indicative of a good model. An RMSE of 5.741 on a scale of 87.4 means that our predictions are off by about 6.5% of the range on average. This means that our predictions are usually reasonable.
+ 
         """
-    )
-    st.info(
-            """
-            **Conclusion:** Now all our predictors are statistically significant and our r-squared and adjusted r-squared values are much higher. Over 60% of the variation in the data are explained by our predictors. The residual plot for the model fitted to the tested model is different from the one previously seen; this is because of the lasso regularization that was performed. Now residuals tend positive, but most are close to zero. Their patterns do not change as the fitted values change. This is indicative of a good model. An RMSE of 5.741 on a scale of 87.4 means that our predictions are off by about 6.5% of the range on average. This means that our predictions are usually reasonable.
-            """
     )
     st.markdown("---")
 
