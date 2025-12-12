@@ -8,13 +8,13 @@ Goal: predict air quality based on wildfire, weather, location, and time
 ----------------------------
 Models Used:
 
-Linear Regression – predict PM2.5 from fire distance and conditions, weather
+Linear Regression – predict PM2.5 from fire distance and conditions, weather, and location
 
 Logit - predict whether PM2.5 is above or below the average scaled value
 
-KNN – predict air quality from similar conditions
+KNN – predict air quality from fire distance and conditions, weather, seasonality, and location
 
-K-Means Clustering – cluster monitoring stations by pollution patterns, interpret clusters (e.g., heavily impacted, moderately impacted)
+K-Means Clustering – make and interpret clusters
 
 PCA – reduce pollutants to 2-3 principal components
 
