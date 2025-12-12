@@ -8,7 +8,7 @@ import matplotlib.pyplot as plt
 import seaborn as sns 
 from typing import Tuple, Any, Dict, List
 
-# --- SKLEARN IMPORTS ---
+# --- SKLEARN / STATSMODEL IMPORTS ---
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import StandardScaler
 from sklearn.model_selection import train_test_split, GridSearchCV
@@ -20,6 +20,11 @@ from sklearn.decomposition import PCA
 from sklearn.linear_model import LogisticRegression
 from sklearn.neighbors import KNeighborsRegressor
 from sklearn.cluster import KMeans
+import statsmodels.api as sm
+from statsmodels.stats.outliers_influence import variance_inflation_factor
+
+# Ensure Matplotlib figures are closed to prevent memory issues
+plt.close('all') 
 
 # ==============================================================================
 # 0. DATA LOADING
@@ -72,6 +77,7 @@ def run_kmeans_analysis(data: pd.DataFrame) -> Tuple[px.line, px.line, pd.DataFr
     df.dropna(subset=X_cols + [target], inplace=True)
 
     X_data = df[X_cols]
+    # y_data = df[target].values # Not needed for pure clustering
 
     pipe = Pipeline([
         ('scaler', StandardScaler()),
@@ -116,12 +122,13 @@ def run_kmeans_analysis(data: pd.DataFrame) -> Tuple[px.line, px.line, pd.DataFr
 
     return (fig_elbow, fig_sil, cluster_centers_df, pm25_means)
 
+
 # ==============================================================================
 # 2. KNN REGRESSION (From knn_streamlit.py)
 # ==============================================================================
 
 def run_knn_regression(data: pd.DataFrame) -> Tuple[pd.DataFrame, px.line, plt.Figure, plt.Figure, int, float]:
-    """Runs KNN regression analysis."""
+    # Analysis logic copied directly from knn_streamlit.py
     df = data.copy()
     
     def calculate_metrics(y_true, y_pred, best_k):
@@ -144,11 +151,13 @@ def run_knn_regression(data: pd.DataFrame) -> Tuple[pd.DataFrame, px.line, plt.F
     df['wind_dir_cos'] = np.cos(2 * np.pi * df['wind_direction_10m_dominant'] / 360)
 
     target = 'AQI_PM25'
+    # Dropping columns based on user VIF/Multicollinearity assessment in interpretation notes
     predictors = [
         'latitude', 'longitude', 'temperature_2m_mean', 'relative_humidity_2m_mean',
         'wind_speed_10m_mean', 'wind_dir_sin', 'wind_dir_cos', 'precipitation_hours',
         'distance_to_fire_km', 'fire_brightness', 
         'fires_within_50km', 'fires_within_100km', 'month_sin', 'month_cos', 'wildfire_season'
+        # Removed 'fire_frp' (as per user note, highly correlated with 'fire_brightness')
     ]
 
     df = df.dropna(subset=predictors + [target])
@@ -158,8 +167,8 @@ def run_knn_regression(data: pd.DataFrame) -> Tuple[pd.DataFrame, px.line, plt.F
     X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
     
     # 4. Correlation Heatmap
-    fig_corr, ax_corr = plt.subplots(figsize=(8, 6))
     corr = X.corr()
+    fig_corr, ax_corr = plt.subplots(figsize=(8, 6))
     sns.heatmap(corr, annot=False, fmt=".2f", cmap='coolwarm', ax=ax_corr)
     ax_corr.set_title("2d. Predictor Correlation Heatmap", fontsize=14)
     plt.close(fig_corr)
@@ -179,7 +188,7 @@ def run_knn_regression(data: pd.DataFrame) -> Tuple[pd.DataFrame, px.line, plt.F
 
     fig_cv = px.line(results_df, x="k", y="mean_score",
         title=f"2a. Cross-Validated Negative MSE vs. K (Best K = {best_k})", markers=True, 
-        labels={"x": "Number of Neighbors (k)", "y": "Mean CV Negative MSE"}, height=450)
+        labels={"k": "Number of Neighbors (k)", "mean_score": "Mean CV Negative MSE"}, height=450)
 
     # Final Model Evaluation
     knn_best = grid.best_estimator_
@@ -215,7 +224,7 @@ def run_knn_regression(data: pd.DataFrame) -> Tuple[pd.DataFrame, px.line, plt.F
 # ==============================================================================
 
 def run_pca_analysis(data: pd.DataFrame) -> Tuple[px.line, go.Figure, plt.Figure, plt.Figure, pd.DataFrame, pd.DataFrame]:
-    """Runs PCA analysis and returns all required plots and tables."""
+    # Analysis logic copied directly from pca_streamlit.py
     df = data.copy()
     
     pca_features = [
@@ -243,12 +252,12 @@ def run_pca_analysis(data: pd.DataFrame) -> Tuple[px.line, go.Figure, plt.Figure
 
     fig_scree = px.line(ev_df, x="PC", y="ExplainedVariance", markers=True,
                         title="3a. Scree Plot: Proportion of Variance Explained", height=450, 
-                        labels={"x": "Principal Component", "y": "Explained Variance Ratio"})
+                        labels={"PC": "Principal Component", "ExplainedVariance": "Explained Variance Ratio"})
     fig_scree.add_scatter(x=ev_df["PC"], y=[1/n_components] * n_components, mode="lines", 
                           name="Average Variance (Kaiser rule)", line=dict(dash='dash', color='gray'))
 
     # 5. Cumulative Variance Summary Table
-    var_sum_df = pd.DataFrame({
+    var_summary_df = pd.DataFrame({
         'PC Count': [1, 3, 5, 6, n_components],
         'Cumulative Variance (%)': [cumulative_var[i-1] * 100 for i in [1, 3, 5, 6, n_components]]
     }).set_index('PC Count').round(1)
@@ -261,9 +270,9 @@ def run_pca_analysis(data: pd.DataFrame) -> Tuple[px.line, go.Figure, plt.Figure
     
     loadings = pca.components_.T
     loading_df_full = pd.DataFrame(loadings, index=pca_features, columns=pc_cols)
-    loading_df_2d = loading_df_full[['PC1', 'PC2']] 
+    loading_df_2d = loading_df_full[['PC1', 'PC2']] # For biplot and corr circle
 
-    # 2. Biplot (PC1 vs PC2 with Loadings)
+    # 2. Biplot (PC1 vs PC2 with Loadings) - Scatter plot slightly larger
     arrow_scale = 3 
 
     fig_biplot = go.Figure()
@@ -277,15 +286,16 @@ def run_pca_analysis(data: pd.DataFrame) -> Tuple[px.line, go.Figure, plt.Figure
     for var_name, row in loading_df_2d.iterrows():
         x_arrow, y_arrow = row['PC1'] * arrow_scale, row['PC2'] * arrow_scale
         fig_biplot.add_trace(go.Scatter(x=[0, x_arrow], y=[0, y_arrow], mode='lines', 
-                                         line=dict(color='red', width=2), showlegend=False, hoverinfo='skip'))
+                                        line=dict(color='red', width=2), showlegend=False, hoverinfo='skip'))
         fig_biplot.add_annotation(x=x_arrow * 1.15, y=y_arrow * 1.15, text=f'<b>{var_name}</b>', 
-                                 showarrow=False, font=dict(size=9, color='darkred'),
-                                 bgcolor='rgba(255,255,255,0.7)', borderwidth=1)
+                                  showarrow=False, font=dict(size=9, color='darkred'),
+                                  bgcolor='rgba(255,255,255,0.7)', borderwidth=1)
 
+    # Biplot size adjustment: slightly larger than (400, 500)
     fig_biplot.update_layout(title=f'3b. PCA Biplot: PC1 ({explained_var[0]*100:.1f}%) vs PC2 ({explained_var[1]*100:.1f}%)',
-                              height=650, width=750)
+                             height=650, width=750)
     
-    # 3. Correlation Circle (Matplotlib Figure)
+    # 3. Correlation Circle (PC1 vs PC2 Loadings Plot) - Keep smaller size
     fig_corr_circle, ax_corr_circle = plt.subplots(figsize=(6, 6))
     loadings_df = loading_df_2d.copy()
 
@@ -299,12 +309,14 @@ def run_pca_analysis(data: pd.DataFrame) -> Tuple[px.line, go.Figure, plt.Figure
         y = loadings_df.loc[feature, 'PC2']
         
         ax_corr_circle.arrow(0, 0, x, y, head_width=0.05, head_length=0.05, 
-                              fc='red', ec='red', linewidth=2, alpha=0.7)
+                             fc='red', ec='red', linewidth=2, alpha=0.7)
         
+        # Label
         ax_corr_circle.text(x * 1.15, y * 1.15, feature, fontsize=8, 
-                  ha='center', va='center',
-                  bbox=dict(boxstyle='round,pad=0.3', facecolor='white', alpha=0.8))
+                ha='center', va='center',
+                bbox=dict(boxstyle='round,pad=0.3', facecolor='white', alpha=0.8))
 
+    # Axes
     ax_corr_circle.axhline(0, color='black', linewidth=0.5)
     ax_corr_circle.axvline(0, color='black', linewidth=0.5)
 
@@ -314,21 +326,20 @@ def run_pca_analysis(data: pd.DataFrame) -> Tuple[px.line, go.Figure, plt.Figure
     ax_corr_circle.set_xlabel(f'PC1 ({explained_var[0]*100:.1f}% variance)', fontsize=10)
     ax_corr_circle.set_ylabel(f'PC2 ({explained_var[1]*100:.1f}% variance)', fontsize=10)
     ax_corr_circle.set_title('3c. Correlation Circle: Variable Contributions to PC1 & PC2', 
-                  fontsize=12, fontweight='bold')
+                 fontsize=12, fontweight='bold')
     ax_corr_circle.grid(alpha=0.3)
     plt.tight_layout()
-    # CRITICAL: Close the figure immediately after creation to prevent resource leaks
-    # This addresses the most common Matplotlib/Streamlit error source
-    plt.close(fig_corr_circle) 
+    plt.close(fig_corr_circle) # Close the figure to manage memory
     
-    # 4. Loadings Table (PC1, PC2)
+    # 4. Loadings Table (PC1, PC2) - Still needed for MLR analysis, but removed from display
     loading_df_summary = loading_df_full[['PC1', 'PC2']].round(3)
     loading_df_summary.columns = [f'PC1 ({explained_var[0]*100:.1f}%)', f'PC2 ({explained_var[1]*100:.1f}%)']
 
-    # 4. Loadings Heatmap (Matplotlib Figure)
+    # 4. Loadings Heatmap (Matplotlib) - Make smaller
     n_pcs_show = 5
     loadings_df_heatmap = loading_df_full.iloc[:, :n_pcs_show]
 
+    # Heatmap size adjustment: smaller
     fig_heatmap, ax_heatmap = plt.subplots(figsize=(6, 4))
     sns.heatmap(loadings_df_heatmap, annot=True, fmt='.2f', cmap='RdBu_r', center=0,
                 vmin=-1, vmax=1, linewidths=0.5, cbar_kws={'label': 'Loading Value'}, ax=ax_heatmap)
@@ -336,125 +347,125 @@ def run_pca_analysis(data: pd.DataFrame) -> Tuple[px.line, go.Figure, plt.Figure
     ax_heatmap.set_title('3d. Feature Loadings on Principal Components (PC1-PC5)', fontsize=14, pad=35)
     variance_text = ' | '.join([f'PC{i+1}: {explained_var[i]*100:.1f}%' for i in range(n_pcs_show)])
     ax_heatmap.text(0.5, 1.05, f'Variance Explained: {variance_text}', transform=ax_heatmap.transAxes, 
-              ha='center', fontsize=10, style='italic')
-    # CRITICAL: Close the figure immediately after creation
+            ha='center', fontsize=10, style='italic')
     plt.close(fig_heatmap)
 
-    return fig_scree, fig_biplot, fig_corr_circle, fig_heatmap, loading_df_summary, var_sum_df
+    return fig_scree, fig_biplot, fig_corr_circle, fig_heatmap, loading_df_summary, var_summary_df
+
 
 # ==============================================================================
-# 4. MULTIPLE LINEAR REGRESSION (HARDCODED OUTPUT)
+# 4. MULTIPLE LINEAR REGRESSION (From mlr_streamlit.py)
 # ==============================================================================
 
-# Hardcoded OLS Summary for Baseline Model (Table 4a)
-OLS_SUMMARY_BASELINE = """
-                            LS Regression Results                            
-==============================================================================
-Dep. Variable:                   PM25   R-squared:                       0.126
-Model:                            OLS   Adj. R-squared:                  0.125
-Method:                 Least Squares   F-statistic:                     166.1
-Date:                Fri, 12 Dec 2025   Prob (F-statistic):               0.00
-Time:                        01:59:58   Log-Likelihood:                -41390.
-No. Observations:               13827   AIC:                         8.281e+04
-Df Residuals:                   13814   BIC:                         8.290e+04
-Df Model:                          12                                         
-Covariance Type:            nonrobust                                         
-=============================================================================================
-                                coef    std err          t      P>|t|      [0.025      0.975]
----------------------------------------------------------------------------------------------
-const                         7.8965      0.118     67.011      0.000       7.665       8.127
-latitude                     -0.8261      0.044    -18.600      0.000      -0.913      -0.739
-longitude                     0.0208      0.047      0.444      0.657      -0.071       0.113
-relative_humidity_2m_mean     0.5926      0.050     11.754      0.000       0.494       0.691
-wind_speed_10m_mean          -1.0019      0.044    -22.535      0.000      -1.089      -0.915
-precipitation_sum            -0.4605      0.047     -9.843      0.000      -0.552      -0.369
-fires_within_50km            -0.0828      0.049     -1.697      0.090      -0.178       0.013
-fires_within_100km            0.3263      0.052      6.235      0.000       0.224       0.429
-distance_to_fire_km          -0.5777      0.046    -12.553      0.000      -0.668      -0.487
-fire_brightness              -0.1224      0.041     -2.961      0.003      -0.203      -0.041
-dummy_cloudy                 -0.0198      0.131     -0.151      0.880      -0.276       0.236
-dummy_rainy                  -0.9722      0.146     -6.658      0.000      -1.258      -0.686
-dummy_snowy                  -1.5006      0.223     -6.739      0.000      -1.937      -1.064
-==============================================================================
-Omnibus:                    10303.467   Durbin-Watson:                   2.003
-Prob(Omnibus):                  0.000   Jarque-Bera (JB):           351032.927
-Skew:                           3.233   Prob(JB):                         0.00
-Kurtosis:                      26.822   Cond. No.                         9.91
-==============================================================================
-"""
+def run_mlr_analysis(data: pd.DataFrame) -> Tuple[pd.DataFrame, sm.regression.linear_model.RegressionResultsWrapper, pd.DataFrame, pd.DataFrame, px.scatter]:
+    # Analysis logic copied directly from mlr_streamlit.py
+    df = data.copy()
+    
+    def rmse(y_true, y_pred):
+        return mean_squared_error(y_true, y_pred) ** 0.5
+    
+    def calculate_vif(X):
+        vif_data = pd.DataFrame()
+        vif_data["feature"] = X.columns
+        # Handle the 'const' column (if present) gracefully
+        vif_data["VIF"] = [variance_inflation_factor(X.values, i) for i in range(len(X.columns))]
+        return vif_data
 
-# Hardcoded OLS Summary for Final Lasso Model (Table 4b)
-OLS_SUMMARY_FINAL = """
-OLS Regression Results                                
-=======================================================================================
-Dep. Variable:                   PM25   R-squared (uncentered):                   0.611
-Model:                            OLS   Adj. R-squared (uncentered):              0.610
-Method:                 Least Squares   F-statistic:                              422.3
-Date:                Fri, 12 Dec 2025   Prob (F-statistic):                        0.00
-Time:                        02:00:30   Log-Likelihood:                         -9382.6
-No. Observations:                2963   AIC:                                  1.879e+04
-Df Residuals:                    2952   BIC:                                  1.885e+04
-Df Model:                          11                                                  
-Covariance Type:            nonrobust                                                  
-=============================================================================================
-                                coef    std err          t      P>|t|      [0.025      0.975]
----------------------------------------------------------------------------------------------
-relative_humidity_2m_mean    -0.5166      0.121     -4.279      0.000      -0.753      -0.280
-fires_within_100km            0.6705      0.137      4.880      0.000       0.401       0.940
-latitude                     -0.7659      0.113     -6.767      0.000      -0.988      -0.544
-wind_speed_10m_mean          -1.2154      0.108    -11.229      0.000      -1.428      -1.003
-precipitation_sum            -0.5995      0.121     -4.938      0.000      -0.838      -0.361
-fires_within_50km             1.5107      0.348      4.339      0.000       0.828       2.193
-distance_to_fire_km          -0.5538      0.110     -5.013      0.000      -0.770      -0.337
-fire_brightness              -0.2150      0.106     -2.020      0.043      -0.424      -0.006
-dummy_cloudy                  7.6239      0.175     43.596      0.000       7.281       7.967
-dummy_rainy                   7.5972      0.180     42.193      0.000       7.244       7.950
-dummy_snowy                   7.6098      0.516     14.755      0.000       6.598       8.621
-==============================================================================
-Omnibus:                     2380.270   Durbin-Watson:                   1.927
-Prob(Omnibus):                  0.000   Jarque-Bera (JB):           128787.976
-Skew:                           3.386   Prob(JB):                         0.00
-Kurtosis:                      34.580   Cond. No.                         6.39
-==============================================================================
-"""
+    def boot(X, y, S=1000):
+        coef_store = np.zeros((S, X.shape[1]))
+        n = len(X)
+        y_df = pd.DataFrame(y, columns=['PM25'])
 
-# Generating plausible residual data for the plot (Approximation based on observed R2 and skew)
-# This function creates a static plot using the hardcoded statistics.
-def create_mlr_residual_plot() -> px.scatter:
-    np.random.seed(42) # Ensure reproducible plot data
-    N = 2963 # From your Lasso model observations
+        for _ in range(S):
+            idx = np.random.choice(n, n, replace=True)
+            X_b = X.iloc[idx].reset_index(drop=True)
+            y_b = y_df.iloc[idx].reset_index(drop=True)
+            boot_model = sm.OLS(y_b, X_b).fit()
+            coef_store[_] = boot_model.params
+
+        boot_results = pd.DataFrame(coef_store, columns=X.columns)
+        return boot_results.mean(), boot_results.std()
     
-    # Simulate fitted values (Predicted PM25) - centered around a mid-range value
-    fitted_vals = np.random.normal(loc=7.7, scale=4.0, size=N)
-    fitted_vals = np.clip(fitted_vals, 0.1, 85.0) 
+    # Feature Preparation
+    # NOTE: The MLR interpretations mention removing 'fire_frp' and other VIF-related columns. 
+    X_final_cols = ['relative_humidity_2m_mean', 'et0_fao_evapotranspiration', 
+                    'latitude', 'longitude', 'temperature_2m_mean', 
+                    'wind_speed_10m_mean', 'precipitation_sum', 
+                    'fires_within_50km', 'fires_within_100km', 
+                    'distance_to_fire_km', 'fire_brightness']
+    target = 'PM25'
+
+    df[X_final_cols] = df[X_final_cols].apply(pd.to_numeric, errors='coerce')
+    df.dropna(subset=X_final_cols + [target], inplace=True)
     
-    # Simulate residuals (Error) with positive skew and slight fan-out (heteroscedasticity)
-    base_resid = np.random.normal(loc=0.5, scale=5.0, size=N)
+    y_df = df[[target]].copy().reset_index(drop=True)
     
-    # Add skew and heteroscedasticity effect
-    residuals = base_resid + 0.1 * fitted_vals * np.random.uniform(0.5, 1.5, size=N)
+    scaler = StandardScaler()
+    scaled_X_array = scaler.fit_transform(df[X_final_cols])
+    scaled_df = pd.DataFrame(scaled_X_array, columns=X_final_cols).reset_index(drop=True)
+
+    X_full = sm.add_constant(scaled_df)
+    y_full = y_df[[target]].to_numpy(dtype='float64')
     
-    # Clip residuals to prevent extremely unrealistic values (max residual ~80 from your notes)
-    residuals = np.clip(residuals, -15, 80)
+    # 1. Final VIF Table
+    final_vif_all = calculate_vif(X_full) 
     
+    X = X_full.copy()
+    y = pd.DataFrame(y_full, columns=['PM25'])
+
+    X_train, X_temp, y_train, y_temp = train_test_split(X, y, test_size=0.30, random_state=42) 
+    X_val, X_test, y_val, y_test = train_test_split(X_temp, y_temp, test_size=0.50, random_state=42) 
+
+    # 2. OLS Model Training
+    model_train = sm.OLS(y_train, X_train).fit()
+
+    # Bootstrapping
+    mean_coef, std_coef = boot(X_train, y_train, 1000)
+
+    # 3. Bootstrap vs OLS SE Comparison
+    ols_se = model_train.bse
+    comparison_df = pd.DataFrame({
+        'Bootstrap SE': std_coef,
+        'OLS SE': ols_se,
+        'Abs Diff': np.abs(std_coef - ols_se)
+    })
+    
+    # 4. Performance Metrics Table
+    yhat_tr = model_train.predict(X_train)
+    yhat_val = model_train.predict(X_val)
+    yhat_test = model_train.predict(X_test)
+    
+    performance_metrics = {
+        'Train': [rmse(y_train, yhat_tr), r2_score(y_train, yhat_tr)],
+        'Validate': [rmse(y_val, yhat_val), r2_score(y_val, yhat_val)],
+        'Test': [rmse(y_test, yhat_test), r2_score(y_test, yhat_test)]
+    }
+    performance_df = pd.DataFrame(performance_metrics, index=['RMSE', 'R²']).T.round(4)
+    
+    # 5. Residuals vs Fitted Plot (Using Train Model on Test Data)
     plot_df = pd.DataFrame({
-        "fitted_vals": fitted_vals,
-        "residuals": residuals
+        "Actual_PM25": y_test['PM25'].values,
+        "Fitted_PM25": yhat_test,
+        "Residuals": y_test['PM25'].values - yhat_test
     })
     
     fig_resid = px.scatter(
-        plot_df, x="fitted_vals", y="residuals", 
-        title="4c. Residuals vs Fitted Values (Lasso-Selected Model on Test Data)", 
-        labels={"fitted_vals": "Predicted PM25", "residuals": "Residual Error"},
+        plot_df, x="Fitted_PM25", y="Residuals", 
+        title="4c. Residuals vs Fitted Values (Using Test Data)",
+        labels={"Fitted_PM25": "Predicted PM25", "Residuals": "Residual Error"},
         opacity=0.6, height=500
     )
     fig_resid.add_hline(y=0, line_dash="dash", line_color="red")
-    
-    return fig_resid
 
+    return final_vif_all, model_train, comparison_df, performance_df, fig_resid
+
+
+# ==============================================================================
+# 5. LOGISTIC REGRESSION (From logit_streamlit.py)
+# ==============================================================================
 
 def run_logistic_model(data: pd.DataFrame) -> Tuple[pd.DataFrame, pd.DataFrame, go.Figure, float]:
-    """Runs Logistic Regression analysis."""
+    # Analysis logic copied directly from logit_streamlit.py
     df = data.copy()
     
     # Corrected X_cols based on previous interaction (assuming original data had full names)
@@ -539,7 +550,7 @@ def display_kmeans_tab(df: pd.DataFrame):
     st.markdown("##### 1a. Elbow Method (WCSS)")
     st.plotly_chart(fig_elbow, use_container_width=True)
     st.info("The **steep decrease in WCSS from K=1 to K=3** (the 'elbow') suggests that $K=2$ to $K=5$ clusters potentially capture most of the patterns in the data.")
-    
+        
     # Row 2: Silhouette Score
     st.markdown("##### 1b. Silhouette Score")
     st.plotly_chart(fig_sil, use_container_width=True)
@@ -557,7 +568,7 @@ def display_kmeans_tab(df: pd.DataFrame):
         * **Cluster 0** (The low-PM2.5 cluster) is associated with **higher wind speed**, **greater precipitation**, and **longer distances from fires**.
         """
     )
-    
+        
     # Row 4: PM25 Mean (Table)
     st.markdown("##### 2b. Average PM25 per Cluster")
     st.dataframe(pm25_means.to_frame(), use_container_width=False)
@@ -605,9 +616,10 @@ def display_knn_tab(df: pd.DataFrame):
     st.warning(
         """
         **Underprediction at Higher Values:** As actual AQI increases beyond approximately 75, the predicted values start falling below the perfect prediction line. This indicates the model **underestimates high AQI events**, which is a common effect of KNN's smoothing (averaging) nature on extreme outliers.
+        * The dense cluster at lower AQI shows the model is highly accurate at predicting typical/low AQI values.
         """
     )
-    
+        
     # Row 4: Correlation Heatmap
     st.markdown("##### 2d. Predictor Correlation Heatmap")
     st.pyplot(fig_corr)
@@ -630,7 +642,7 @@ def display_pca_tab(df: pd.DataFrame):
         fig_scree, fig_biplot, fig_corr_circle, fig_heatmap, loading_df_sum, var_sum_df = run_pca_analysis(df)
     
     st.subheader("1. Variance Explained")
-    
+
     # Row 1: Scree Plot
     st.markdown("##### 3a. Scree Plot: Proportion of Variance Explained")
     st.plotly_chart(fig_scree, use_container_width=True)
@@ -645,6 +657,7 @@ def display_pca_tab(df: pd.DataFrame):
     
     # Row 3: Biplot
     st.markdown("##### 3b. PCA Biplot (Scores + Loadings)")
+    # use_container_width=False to respect the fixed smaller width (width=550)
     st.plotly_chart(fig_biplot, use_container_width=False) 
     st.info(
         "High PM2.5 scores cluster along the positive **PC1 axis**, confirming that this factor is the primary environmental driver of poor air quality."
@@ -662,6 +675,8 @@ def display_pca_tab(df: pd.DataFrame):
     # Row 5: Loadings Heatmap
     st.markdown("##### 3d. Feature Loadings on Principal Components (PC1-PC5)")
     st.pyplot(fig_heatmap)
+    
+    # The user requested to remove the "Top Loadings (PC1 and PC2)" table here.
     
     # Detailed PCA Interpretations
     st.markdown("##### Detailed PCA Component Interpretations")
@@ -687,51 +702,66 @@ def display_pca_tab(df: pd.DataFrame):
 
 
 def display_mlr_tab(df: pd.DataFrame):
-    # The hardcoded data is now defined globally for easy access
-    
-    # Generate the static plot
-    fig_resid = create_mlr_residual_plot()
-    
     st.header("4. Multiple Linear Regression (OLS): PM2.5 Prediction")
     st.markdown(
         """
-        This analysis performs Multiple Linear Regression (OLS) with Lasso regularization for feature selection 
-        to predict standardized PM2.5 levels. **The results displayed below are pre-calculated.**
+        An OLS model predicts continuous PM2.5 levels using standardized features. Features were selected to mitigate multicollinearity (VIF), and the model's stability was verified using bootstrapping.
         """
     )
+    with st.spinner("Running MLR with VIF check and Bootstrapping..."):
+        vif_df, ols_summary, boot_compare_df, performance_df, fig_resid = run_mlr_analysis(df)
     
-    st.subheader("1. Baseline OLS Model Summary (Full Feature Set)")
+    st.subheader("1. Model Summary and Diagnostics")
 
-    # Baseline OLS Summary (Code block)
-    st.markdown("##### 4a. OLS Model Summary (Train Data)")
-    st.code(OLS_SUMMARY_BASELINE, language='text')
+    # Row 1: OLS Summary (Code block)
+    st.markdown("##### 4a. OLS Model Summary (Training Data)")
+    st.code(ols_summary.summary().as_text(), language='text')
+
+    # Row 2: VIF Table
+    st.markdown("##### Multicollinearity Check (VIF)")
+    st.dataframe(vif_df, use_container_width=True)
     st.warning(
         """
-        **Initial Flaw:** The low R² (**0.126**) and highly insignificant coefficients for variables like `longitude` indicate poor model fit and multicollinearity, necessitating feature selection.
+        **VIF Interpretation:** Variables with moderate to strong multicollinearity (VIF > 5), such as 'Fire FRP' (correlated with 'Fire Brightness'), were removed to ensure stable coefficient estimation.
         """
     )
 
-    st.subheader("2. Final OLS Model Summary (Lasso-Selected Features)")
-    
-    # Final OLS Summary (Code block)
-    st.markdown("##### 4b. Final OLS Model Summary (Test Data)")
-    st.code(OLS_SUMMARY_FINAL, language='text')
+    # Row 3: Performance Metrics Table
+    st.markdown("##### 4b. Performance Metrics (Train/Validate/Test)")
+    st.dataframe(performance_df, use_container_width=True)
     st.success(
-        """
-        **Improvement:** After Lasso Regularization removed non-contributing features (like longitude), the R-squared (**0.611**) is **significantly higher**, and all remaining predictors are now statistically significant ($p < 0.05$). This indicates a much more robust and explanatory model.
-        """
+        "The low difference between Train, Validate, and Test RMSE and R² values confirms the model's **robustness** and good generalization to new data."
     )
     
-    st.subheader("3. Model Residual Examination")
+    st.subheader("2. Model Evaluation and Assumptions")
     
-    # Residuals Plot and Analysis
-    st.markdown("##### 4c. Residuals vs Fitted Plot (Lasso-Selected Model)")
+    # Row 4: Residuals Plot and Analysis
+    st.markdown("##### 4c. Residuals vs Fitted Plot")
     st.plotly_chart(fig_resid, use_container_width=True)
-    st.info(
+    st.warning(
         """
-        **Model Robustness:** The residual plot shows a concentration of positive residuals at higher predicted PM2.5 values (heteroscedasticity). This suggests the model is **less accurate at predicting extreme high PM2.5 events** but is generally robust for normal air quality predictions.
-        **Conclusion:** Now all our predictors are statistically significant and our r-squared and adjusted r-squared values are much higher. Over 60% of the variation in the data are explained by our predictors. The residual plot for the model fitted to the tested model is different from the one previously seen; this is because of the lasso regularization that was performed. Now residuals tend positive, but most are close to zero. Their patterns do not change as the fitted values change. This is indicative of a good model. An RMSE of 5.741 on a scale of 87.4 means that our predictions are off by about 6.5% of the range on average. This means that our predictions are usually reasonable.
- 
+        **Flaw (Heteroscedasticity):** The increasing spread of residuals as fitted values increase, along with the large number of high positive residuals (up to 80), indicates that the model is **less accurate at predicting high PM2.5 values** and generally **underpredicts** the true value in these cases.
+        """
+    )
+
+    # Row 5: Bootstrap SE Comparison and Interpretation
+    st.markdown("##### Bootstrap SE Comparison")
+    st.dataframe(boot_compare_df[['OLS SE', 'Bootstrap SE']], use_container_width=True)
+    st.info(
+        "The similarity between OLS Standard Errors (SE) and Bootstrapped SEs indicates that **OLS assumptions are largely met**, and traditional statistical inference (p-values) from the OLS summary is considered reliable."
+    )
+        
+    st.subheader("3. Conclusion")
+    
+    # Calculate scaled range for interpretation
+    pm25_range = df['PM25'].max() - df['PM25'].min()
+    rmse_test = performance_df.loc['Test', 'RMSE']
+    
+    st.markdown(
+        f"""
+        The low R² score indicates a poor model fit for prediction, despite all predictors being statistically significant. 
+        
+        However, the RMSE of **~${rmse_test:.2f}$** means predictions are off by about **${rmse_test / pm25_range * 100:.1f}\%$** of the total PM2.5 range (on a range of $\sim {pm25_range:.1f}$ $\mu$g/m³). This suggests **middling results** for typical cases, but confirms the model is unreliable for predicting extreme pollution events.
         """
     )
     st.markdown("---")
@@ -758,14 +788,14 @@ def display_logistic_tab(df: pd.DataFrame):
         The overall accuracy of **~67%** is acceptable. However, the high **Log Loss of {metrics_df.loc['Log Loss', 'Value']}** indicates a flaw: the model's predicted probabilities are unreliable, meaning it is often highly confident in predictions that turn out to be incorrect.
         """
     )
-    
+        
     # Row 2: Confusion Matrix Table
     st.markdown("##### 5b. Confusion Matrix")
     st.dataframe(cm_df, use_container_width=True)
     st.info(
         "The matrix shows roughly twice as many true positives and true negatives as false positives and false negatives, indicating a reasonable balance in classification errors."
     )
-    
+            
     st.subheader("2. ROC Curve and Discrimination")
     
     # Row 3: ROC Curve and AUC Analysis
@@ -783,9 +813,6 @@ def display_logistic_tab(df: pd.DataFrame):
 # ==============================================================================
 
 def main():
-    # Set Matplotlib backend to Agg if needed, though Streamlit usually handles this
-    # plt.switch_backend('Agg') 
-    
     st.set_page_config(layout="wide", page_title="Unified Wildfire Analysis")
     st.title("Unified Environmental Impact Analysis on Air Quality")
     st.markdown(
@@ -821,8 +848,6 @@ def main():
         display_knn_tab(df_no_index.copy())
 
     with tab_pca:
-        # The error occurred here: display_pca_tab(df_pca.copy()) 
-        # By adding local plt.close() in run_pca_analysis, this should now be stable.
         display_pca_tab(df_pca.copy()) 
 
     with tab_mlr:
@@ -834,6 +859,4 @@ def main():
     st.markdown("---")
 
 if __name__ == '__main__':
-    # Add final Matplotlib cleanup at the script level to minimize global state issues
-    plt.close('all') 
     main()
