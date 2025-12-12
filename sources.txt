@@ -1,2 +1,7 @@
+Sources:
+Weather Data: https://open-meteo.com/en/docs/historical-weather-api
+Fire Data: https://firms.modaps.eosdis.nasa.gov/
+Air Data: https://aqs.epa.gov/aqsweb/airdata/download_files.html#Daily
 States to Regions Data Dictionary: https://code.activestate.com/recipes/580661-states-to-regions/#:~:text=States%20to%20Regions%20«%20Python%20recipes,◄
 State Abbreviations Dictionary: https://gist.github.com/rogerallen/1583593
+
