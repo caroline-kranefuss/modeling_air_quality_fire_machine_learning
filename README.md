@@ -18,6 +18,8 @@ K-Means Clustering – cluster monitoring stations by pollution patterns, interp
 
 PCA – reduce pollutants to 2-3 principal components
 
+Bonus time series model
+
 ----------------------------
 Numeric Variables (14+):
 
